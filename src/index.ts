@@ -2,6 +2,7 @@ export { setup, waitForCondition } from './setup';
 export { startDevServer } from './dev-server';
 export { NullPathVisualizer } from './visualization/PathVisualizer';
 export { PrismarinePathVisualizer } from './visualization/PrismarinePathVisualizer';
+export { PrismarineClientVisualizer, NullClientVisualizer } from './visualization/ClientVisualizer';
 
 export type {
   WorldLayout,
@@ -9,6 +10,7 @@ export type {
   PathNode,
   NeoMeta,
   PathVisualizer,
+  ClientVisualizer,
   SetupOptions,
   DevServerOptions,
 } from './types';
