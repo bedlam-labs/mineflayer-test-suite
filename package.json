@@ -1,0 +1,35 @@
+{
+  "name": "mineflayer-test-suite",
+  "version": "1.0.0",
+  "description": "Testing suite library for mineflayer bots. Includes test server setup, world layout, visualization, and dev panel.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mineflayer-test-server": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "void-generator.js"
+  ],
+  "dependencies": {
+    "canvas": "^3.2.3",
+    "flying-squid": "^1.12.0",
+    "mineflayer": "^4.23.0",
+    "prismarine-viewer": "^1.33.0",
+    "vec3": "^0.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "minecraft-data": "*",
+    "prismarine-block": "*",
+    "prismarine-chunk": "*",
+    "prismarine-registry": "*"
+  }
+}
