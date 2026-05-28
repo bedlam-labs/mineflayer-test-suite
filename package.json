@@ -19,7 +19,7 @@
     "canvas": "^3.2.3",
     "flying-squid": "^1.12.0",
     "mineflayer": "^4.23.0",
-    "prismarine-viewer": "github:bedwars-agents/prismarine-viewer",
+    "prismarine-viewer": "github:bedlam-labs/prismarine-viewer",
     "vec3": "^0.1.10"
   },
   "devDependencies": {
