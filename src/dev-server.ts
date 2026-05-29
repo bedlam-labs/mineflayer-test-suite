@@ -7,7 +7,7 @@ import mineflayer from 'mineflayer';
 import { Vec3 } from 'vec3';
 import type { DevServerOptions, WorldLayout } from './types';
 
-const { mineflayer: startMineflayerViewer } = require('prismarine-viewer');
+const { mineflayer: startMineflayerViewer } = require('@aidentran900/prismarine-viewer');
 
 let dirtyPositions: Array<{ x: number; y: number; z: number }> = [];
 

@@ -44,7 +44,7 @@ const child_process_1 = require("child_process");
 const flying_squid_1 = require("flying-squid");
 const mineflayer_1 = __importDefault(require("mineflayer"));
 const vec3_1 = require("vec3");
-const { mineflayer: startMineflayerViewer } = require('prismarine-viewer');
+const { mineflayer: startMineflayerViewer } = require('@aidentran900/prismarine-viewer');
 let dirtyPositions = [];
 function stateIdOf(mcData, PBlock, blockName) {
     const info = mcData.blocksByName[blockName];
