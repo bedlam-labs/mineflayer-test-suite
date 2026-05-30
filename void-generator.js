@@ -6,13 +6,12 @@ module.exports = function ({ version = '1.8.8' } = {}) {
   const Chunk      = require('prismarine-chunk')(registry)
   const floorState = registry.blocksByName.bedrock.defaultState
 
-  return function generateChunk () {
+  return function generateChunk (chunkX, chunkZ) {
     const chunk = new Chunk()
-    for (let x = 0; x < 16; x++) {
-      for (let z = 0; z < 16; z++) {
-        chunk.setBlockStateId(new Vec3(x, 0, z), floorState)
-      }
+    if (chunkX < 1 && chunkZ < 1 && chunkX >= -1 && chunkZ >= -1) {
+      chunk.setBlockStateId(new Vec3(Math.floor(chunkX / 16), 0, Math.floor(chunkZ / 16)), floorState)
     }
+    
     return chunk
   }
 }

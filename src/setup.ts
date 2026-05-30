@@ -2,7 +2,7 @@ import * as http from 'http';
 import { createMCServer } from 'flying-squid';
 import mineflayer, { Bot } from 'mineflayer';
 import { NullPathVisualizer } from './visualization/PathVisualizer';
-import { PrismarinePathVisualizer } from './visualization/PrismarinePathVisualizer';
+import { RemotePathVisualizer } from './visualization/RemotePathVisualizer';
 import type { PathVisualizer, SetupOptions, TestEnv, WorldLayout } from './types';
 
 const SERVER_DEFAULTS = {
@@ -10,7 +10,7 @@ const SERVER_DEFAULTS = {
   version:       '1.8.8',
   logging:       false,
   plugins:       {},
-  'view-distance': 2,
+  'view-distance': 3,
   'max-players':   4,
   gameMode:        1,
   'player-list-text': { header: '', footer: '' },
@@ -101,9 +101,7 @@ export async function setup(options: SetupOptions): Promise<TestEnv> {
   let visualizer: PathVisualizer = new NullPathVisualizer();
 
   if (externalPort) {
-    const { mineflayer: startMineflayerViewer } = require('prismarine-viewer');
-    startMineflayerViewer(bot, { port: externalPort + 3000, firstPerson: false, viewDistance: 4 });
-    visualizer = new PrismarinePathVisualizer(bot);
+    visualizer = new RemotePathVisualizer(externalPort + 2000);
   }
 
   (bot as any).on('path_update', (update: { path: Array<{ x: number; y: number; z: number; neo?: unknown }> }) => {

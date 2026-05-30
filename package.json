@@ -5,11 +5,13 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "mineflayer-test-server": "dist/cli.js"
+    "mineflayer-test-suite": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "ui:build": "cd ui && npm run build",
+    "ui:dev": "cd ui && npm run dev",
+    "prepublishOnly": "npm run build && npm run ui:build"
   },
   "files": [
     "dist",

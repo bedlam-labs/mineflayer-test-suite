@@ -25,6 +25,7 @@ const { port, cwd, viewDistance } = parseArgs(process.argv);
 startDevServer({
   port,
   viewDistance,
+  cwd,
   testRunner: (suite) => ({
     script: suite === 'integration' ? 'test:integration' : `test:${suite}`,
     cwd,

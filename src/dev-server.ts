@@ -1,11 +1,13 @@
 // @ts-nocheck
 import * as http from 'http';
+import * as fs from 'fs';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { createMCServer } from 'flying-squid';
 import mineflayer from 'mineflayer';
 import { Vec3 } from 'vec3';
 import type { DevServerOptions, WorldLayout } from './types';
+import { PrismarinePathVisualizer } from './visualization/PrismarinePathVisualizer';
 
 const { mineflayer: startMineflayerViewer } = require('@aidentran900/prismarine-viewer');
 
@@ -65,57 +67,34 @@ async function applyLayout(
   }
 }
 
-function buildPanelHtml(viewerPort: number): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Mineflayer Tests</title>
-  <style>
-    *{box-sizing:border-box}
-    body{margin:0;font-family:monospace;background:#141414;color:#ddd;display:flex;flex-direction:column;height:100vh;padding:14px;gap:10px}
-    h1{margin:0;font-size:14px;color:#666}
-    h1 a{color:#444;text-decoration:none}h1 a:hover{color:#888}
-    .row{display:flex;gap:8px;flex-wrap:wrap}
-    button{background:#222;color:#ccc;border:1px solid #444;padding:7px 14px;cursor:pointer;border-radius:3px;font-family:monospace;font-size:12px;transition:border-color .15s}
-    button:hover:not(:disabled){background:#2a2a2a;border-color:#777}
-    button:disabled{opacity:.4;cursor:default}
-    button.running{border-color:#e8a020;color:#e8a020}
-    #output{flex:1;overflow-y:auto;background:#0d0d0d;padding:12px;border-radius:3px;border:1px solid #2a2a2a;white-space:pre-wrap;font-size:12px;line-height:1.5}
-  </style>
-</head>
-<body>
-  <h1>Mineflayer Tests &nbsp;·&nbsp; <a href="http://localhost:${viewerPort}" target="_blank">viewer :${viewerPort}</a></h1>
-  <div class="row">
-    <button id="b-integration" onclick="run('integration')">All Tests</button>
-    <button id="b-reset" onclick="reset()" style="margin-left:auto;color:#555;border-color:#333">Reset World</button>
-  </div>
-  <pre id="output">Ready.</pre>
-  <script>
-    const out = document.getElementById('output');
-    let running = null;
-    const TEST_BTNS = ['b-integration'];
-    const es = new EventSource('/events');
-    es.onmessage = e => { out.textContent += e.data + '\\n'; out.scrollTop = out.scrollHeight; };
-    es.addEventListener('done', () => {
-      TEST_BTNS.forEach(id => { const b = document.getElementById(id); b.disabled = false; b.classList.remove('running'); });
-      running = null;
-    });
-    function run(suite) {
-      if (running) return;
-      running = suite;
-      out.textContent = '';
-      TEST_BTNS.forEach(id => document.getElementById(id).disabled = true);
-      document.getElementById('b-' + suite).classList.add('running');
-      fetch('/run/' + suite, { method: 'POST' });
-    }
-    function reset() {
-      fetch('/reset', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({fillRegions:[],placedBlocks:[],spawnPoint:{x:0,y:1,z:0}}) })
-        .then(() => out.textContent += '\\n[reset] world cleared\\n');
-    }
-  </script>
-</body>
-</html>`;
+const UI_DIST = path.resolve(__dirname, '../ui/dist');
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.js':   'application/javascript',
+  '.css':  'text/css',
+  '.svg':  'image/svg+xml',
+  '.json': 'application/json',
+  '.png':  'image/png',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+
+function serveStatic(res: http.ServerResponse, urlPath: string): boolean {
+  const safePath = urlPath === '/' ? '/index.html' : urlPath;
+  const filePath = path.join(UI_DIST, safePath);
+  if (!filePath.startsWith(UI_DIST)) {
+    res.writeHead(403).end();
+    return true;
+  }
+  try {
+    const data = fs.readFileSync(filePath);
+    const ext = path.extname(filePath);
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' }).end(data);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const sseClients: http.ServerResponse[] = [];
@@ -129,6 +108,29 @@ function broadcastEvent(name: string) {
   sseClients.forEach(c => c.write(`event: ${name}\ndata:\n\n`));
 }
 
+interface TestEntry { suite: string; file: string; name: string }
+
+function scanTests(dir: string): TestEntry[] {
+  const results: TestEntry[] = [];
+  const integrationDir = path.join(dir, '__tests__', 'integration');
+
+  let entries;
+  try { entries = fs.readdirSync(integrationDir, { withFileTypes: true }); }
+  catch { return results; }
+
+  for (const entry of entries) {
+    if (entry.isDirectory() || !/\.test\.[jt]s$/.test(entry.name)) continue;
+    const content = fs.readFileSync(path.join(integrationDir, entry.name), 'utf-8');
+    const pattern = /(?:^|\s)(?:it|test)\s*\(\s*['"`](.*?)['"`]/gm;
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      results.push({ suite: 'integration', file: entry.name, name: match[1] });
+    }
+  }
+
+  return results;
+}
+
 export function startDevServer(options: DevServerOptions) {
   const {
     port,
@@ -136,6 +138,7 @@ export function startDevServer(options: DevServerOptions) {
     adminPort  = port + 2000,
     version    = '1.8.8',
     viewDistance = 4,
+    cwd: projectCwd,
     testRunner,
   } = options;
 
@@ -144,11 +147,15 @@ export function startDevServer(options: DevServerOptions) {
 
   let activeTest: ChildProcess | null = null;
 
-  function runTest(suite: string): boolean {
+  function runTest(suite: string, testName?: string): boolean {
     if (activeTest) return false;
     const { script, cwd, env: extraEnv } = testRunner(suite);
-    broadcast(`\n$ npm run ${script}\n\n`);
-    activeTest = spawn('npm', ['run', script], {
+    const label = testName ? `${script} -t "${testName}"` : script;
+    broadcast(`\n$ npm run ${label}\n\n`);
+    const spawnArgs = testName
+      ? ['run', script, '--', '--testNamePattern', testName]
+      : ['run', script];
+    activeTest = spawn('npm', spawnArgs, {
       cwd,
       env: { ...process.env, TEST_SERVER_PORT: String(port), ...extraEnv },
       shell: true,
@@ -181,8 +188,6 @@ export function startDevServer(options: DevServerOptions) {
     server.getSpawnPoint = async () => server.spawnPoint;
   });
 
-  const panelHtml = buildPanelHtml(viewerPort);
-
   server.once('listening', async () => {
     console.log(`[server] port ${port}`);
 
@@ -191,8 +196,14 @@ export function startDevServer(options: DevServerOptions) {
     http.createServer((req, res) => {
       const url = req.url ?? '/';
 
-      if (req.method === 'GET' && url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html' }).end(panelHtml);
+      if (req.method === 'GET' && url === '/api/config') {
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(
+          JSON.stringify({ viewerPort, adminPort, port })
+        );
+
+      } else if (req.method === 'GET' && url === '/api/tests') {
+        const tests = projectCwd ? scanTests(projectCwd) : [];
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tests));
 
       } else if (req.method === 'GET' && url === '/events') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
@@ -223,10 +234,33 @@ export function startDevServer(options: DevServerOptions) {
           }
         });
 
-      } else if (req.method === 'POST' && url.startsWith('/run/')) {
-        const suite = url.slice(5);
-        res.writeHead(runTest(suite) ? 200 : 409).end();
+      } else if (req.method === 'POST' && url === '/visualize') {
+        let body = '';
+        req.on('data', (d: Buffer) => { body += d; });
+        req.on('end', () => {
+          try {
+            const payload = JSON.parse(body);
+            if (payload.clear) {
+              pathVisualizer?.clear();
+            } else if (payload.nodes) {
+              pathVisualizer?.renderPath(payload.nodes);
+            }
+            res.writeHead(200).end('ok');
+          } catch (err: any) {
+            res.writeHead(400).end(err.message);
+          }
+        });
 
+      } else if (req.method === 'POST' && url.startsWith('/run/')) {
+        const parsed = new URL(url, 'http://localhost');
+        const suite = parsed.pathname.slice(5);
+        const testName = parsed.searchParams.get('test') ?? undefined;
+        res.writeHead(runTest(suite, testName) ? 200 : 409).end();
+
+      } else if (req.method === 'GET') {
+        if (!serveStatic(res, url)) {
+          serveStatic(res, '/');
+        }
       } else {
         res.writeHead(404).end();
       }
@@ -238,8 +272,11 @@ export function startDevServer(options: DevServerOptions) {
       host: 'localhost', port, username: 'Observer', version, auth: 'offline',
     });
 
+    let pathVisualizer: PrismarinePathVisualizer | null = null;
+
     observerBot.once('spawn', () => {
       startMineflayerViewer(observerBot, { port: viewerPort, firstPerson: false, viewDistance });
+      pathVisualizer = new PrismarinePathVisualizer(observerBot);
       console.log(`[viewer] http://localhost:${viewerPort}`);
 
       const observer = Object.values(server.players).find((p: any) => p.username === 'Observer') as any;

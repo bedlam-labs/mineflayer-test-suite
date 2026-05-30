@@ -61,6 +61,7 @@ export interface DevServerOptions {
   adminPort?: number;
   version?: string;
   viewDistance?: number;
+  cwd?: string;
   testRunner: (suite: string) => { script: string; cwd: string; env?: Record<string, string> };
 }
 
